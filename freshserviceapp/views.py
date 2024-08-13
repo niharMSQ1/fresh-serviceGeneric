@@ -17,61 +17,45 @@ def test(request):
     })
 
 @csrf_exempt
-def create_ticket(request):
+def delete_all_tickets(request):
+    freshservice_domain = "secqureone509.freshservice.com" # Example: "yourcompany.freshservice.com"
+    api_key = config('FRESHSERVICE_API_AUTH')  # Your Freshservice API Key
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Basic {api_key}"
+    }
+
+    tickets_url = f"https://{freshservice_domain}/api/v2/tickets"
+    params = {
+        "per_page": 100  # Fetch 100 tickets per page (maximum limit)
+    }
+
     try:
-        if request.method != 'POST':
-            return JsonResponse({"error": "Invalid request method. Only POST is allowed."}, status=405)
+        while True:
+            response = requests.get(tickets_url, headers=headers, params=params)
+            if response.status_code != 200:
+                return JsonResponse({"error": f"Failed to fetch tickets: {response.json()}"}, status=response.status_code)
 
-        data = json.loads(request.body)
+            tickets = response.json().get("tickets", [])
+            if not tickets:
+                return JsonResponse({"message": "No tickets found or all tickets have been deleted."}, status=200)
 
-        connection = get_connection()
-        if not connection or not connection.is_connected():
-            return JsonResponse({"error": "Failed to connect to the database"}, status=500)
+            # Delete each ticket
+            for ticket in tickets:
+                ticket_id = ticket.get("id")
+                delete_url = f"{tickets_url}/{ticket_id}"
+                delete_response = requests.delete(delete_url, headers=headers)
 
-        try:
-            with connection.cursor(dictionary=True) as cursor:
-                cursor.execute("SELECT * FROM vulnerabilities ORDER BY id DESC")
-                result = cursor.fetchall()
-                
-                if not result:
-                    return JsonResponse({"error": "No vulnerabilities found"}, status=404)
-
-                last_entry = result[0]
-                last_entry_id = last_entry.get("id")
-
-                if not Vulnerabilities.objects.filter(vulId=last_entry_id).exists():
-                    new_vul = Vulnerabilities(vulId=last_entry_id)
-                    new_vul.save()
-
-                    url = config("FRESHSERVICE_API_URL")
-                    headers = {
-                        "Content-Type": "application/json",
-                        "Authorization": f"Basic {config('FRESHSERVICE_API_AUTH')}"
-                    }
-
-                    response = requests.post(url, json=data, headers=headers)
-
-                    if response.status_code >= 400:
-                        return JsonResponse({
-                            "error": "Failed to create ticket",
-                            "status_code": response.status_code,
-                            "response_data": response.json()
-                        }, status=response.status_code)
-
-                    return JsonResponse({
-                        "status_code": response.status_code,
-                        "response_data": response.json()
-                    })
+                if delete_response.status_code == 204:
+                    print(f"Ticket {ticket_id} deleted successfully.")
                 else:
-                    return JsonResponse({"message": "Vulnerability already exists"}, status=200)
+                    print(f"Failed to delete ticket {ticket_id}: {delete_response.json()}")
 
-        except Exception as e:
-            return JsonResponse({"error": f"Database query failed: {str(e)}"}, status=500)
-        finally:
-            if connection.is_connected():
-                connection.close()
+            # Check if there are more pages
+            if "next_page" not in response.json():
+                break
 
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON in request body"}, status=400)
+        return JsonResponse({"message": "All tickets have been deleted."}, status=200)
+
     except Exception as e:
-        return JsonResponse({"error": f"An unexpected error occurred: {str(e)}"}, status=500)
+        return JsonResponse({"error": str(e)}, status=500)
