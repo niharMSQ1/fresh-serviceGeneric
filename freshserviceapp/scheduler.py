@@ -22,12 +22,10 @@ def call_create_ticket():
             existing_vul_ids = set(Vulnerabilities.objects.values_list('vulId', flat=True))
             count = 0
 
-            # If there are no existing vulnerabilities in the Django model
             if len(existing_vul_ids) == 0:
                 for result in results:
                     vul_id = result.get("id")
 
-                    # Create a ticket only if it doesn't already exist in the Django model
                     if vul_id not in existing_vul_ids:
                         priority_mapping = {
                             "low": 1,
@@ -39,6 +37,20 @@ def call_create_ticket():
                         priority = result.get("patch_priority", "").lower()
                         mapped_priority = priority_mapping.get(priority, 0)
 
+                        # Fetch associated data from exploits and patch tables
+                        cursor.execute("SELECT * FROM exploits WHERE vul_id = %s", (vul_id,))
+                        exploits = cursor.fetchall()
+
+                        cursor.execute("SELECT * FROM patch WHERE vul_id = %s", (vul_id,))
+                        patches = cursor.fetchall()
+                        if len(patches) != 0:
+                            # Assuming 'os' field in patches[0] contains a JSON string
+                            os_data = json.loads(patches[0].get('os'))
+                            if len(os_data) != 0:
+                                patchos = ", ".join([f"{item['os_name']} - {item['os_version']}" for item in os_data])
+
+
+
                         combined_data = {
                             "description": result.get("description", "").replace("'", '"'),
                             "subject": result.get("name"),
@@ -47,7 +59,19 @@ def call_create_ticket():
                             "status": 2,
                             "cc_emails": ["ram@freshservice.com", "diana@freshservice.com"],
                             "workspace_id": 2,
-                            "urgency": 3
+                            "urgency": 3,
+                            "custom_fields": {
+                                "major_incident_type": None,
+                                "business_impact": None,
+                                "impacted_locations": None,
+                                "patchcomplexity": patches[0].get("complexity") if patches else None,
+                                "patchurl": patches[0].get("url") if patches else None,
+                                "patchos": patchos if patches else None,
+                                "exploitsname": exploits[0].get("name") if exploits else None,
+                                "exploitsdescription": exploits[0].get("description", "").replace("'", '"') if exploits else None,
+                                "exploitscomplexity": exploits[0].get("complexity") if exploits else None,
+                                "exploitsdependency": exploits[0].get("dependency") if exploits else None
+                            }
                         }
 
                         url = config("FRESHSERVICE_API_URL")
@@ -57,7 +81,7 @@ def call_create_ticket():
                         }
 
                         response = requests.post(url, json=combined_data, headers=headers)
-                        
+
                         if response.status_code == 201:
                             Vulnerabilities.objects.create(vulId=vul_id)
                             count += 1
@@ -67,11 +91,9 @@ def call_create_ticket():
 
                 return JsonResponse({"message": f"{count} tickets created successfully."}, status=200)
 
-            # If there are existing vulnerabilities in the Django model
             else:
                 latest_existing_id = max(existing_vul_ids)
 
-                # Check if there are any new vulnerabilities that need tickets
                 if results[0]["id"] == latest_existing_id:
                     return JsonResponse({"message": "Nothing to add"}, status=200)
                 
@@ -90,6 +112,17 @@ def call_create_ticket():
                         priority = vul.get("patch_priority", "").lower()
                         mapped_priority = priority_mapping.get(priority, 0)
 
+                        # Fetch associated data from exploits and patch tables
+                        cursor.execute("SELECT * FROM exploits WHERE vul_id = %s", (vul_id,))
+                        exploits = cursor.fetchall()
+
+                        cursor.execute("SELECT * FROM patch WHERE vul_id = %s", (vul_id,))
+                        patches = cursor.fetchall()
+                        if len(patches) != 0:
+                            os_data = json.loads(patches[0].get('os'))
+                            if len(os_data) != 0:
+                                patchos = ", ".join([f"{item['os_name']} - {item['os_version']}" for item in os_data])
+
                         combined_data = {
                             "description": vul.get("description", "").replace("'", '"'),
                             "subject": vul.get("name"),
@@ -98,7 +131,19 @@ def call_create_ticket():
                             "status": 2,
                             "cc_emails": ["ram@freshservice.com", "diana@freshservice.com"],
                             "workspace_id": 2,
-                            "urgency": 3
+                            "urgency": 3,
+                            "custom_fields": {
+                                "major_incident_type": None,
+                                "business_impact": None,
+                                "impacted_locations": None,
+                                "patchcomplexity": patches[0].get("complexity") if patches else None,
+                                "patchurl": patches[0].get("url") if patches else None,
+                                "patchos": patchos if patches else None,
+                                "exploitsname": exploits[0].get("name") if exploits else None,
+                                "exploitsdescription": exploits[0].get("description", "").replace("'", '"') if exploits else None,
+                                "exploitscomplexity": exploits[0].get("complexity") if exploits else None,
+                                "exploitsdependency": exploits[0].get("dependency") if exploits else None
+                            }
                         }
 
                         url = config("FRESHSERVICE_API_URL")
@@ -126,6 +171,8 @@ def call_create_ticket():
             connection.close()
 
 
+
+
 def check_closed_tickets():
     url = "https://secqureone509.freshservice.com/api/v2/tickets"
     headers = {
@@ -146,6 +193,6 @@ def check_closed_tickets():
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    scheduler.add_job(call_create_ticket, IntervalTrigger(minutes=0.5))
+    # scheduler.add_job(call_create_ticket, IntervalTrigger(minutes=0.5))
     # scheduler.add_job(check_closed_tickets, IntervalTrigger(minutes=0.25))
     scheduler.start()

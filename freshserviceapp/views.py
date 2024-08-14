@@ -59,3 +59,11 @@ def delete_all_tickets(request):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+    
+@csrf_exempt
+def createManually(request):
+    from .scheduler import call_create_ticket
+    request = call_create_ticket()
+    response = request
+
+    print()
