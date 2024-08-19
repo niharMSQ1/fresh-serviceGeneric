@@ -18,8 +18,8 @@ def test(request):
 
 @csrf_exempt
 def delete_all_tickets(request):
-    freshservice_domain = "secqureone509.freshservice.com" # Example: "yourcompany.freshservice.com"
-    api_key = config('FRESHSERVICE_API_AUTH')  # Your Freshservice API Key
+    freshservice_domain = "secqureone770.freshservice.com"
+    api_key = "cXZwcWhEcVJYdTh3WkltUW9aTw=="
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Basic {api_key}"
