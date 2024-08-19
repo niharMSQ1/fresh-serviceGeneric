@@ -18,13 +18,13 @@ def call_create_ticket():
             cursor.execute("SELECT * FROM vulnerabilities ORDER BY id DESC")
             results = cursor.fetchall()
 
-            # Fetch all existing vulnerability IDs in the Django model
             existing_vul_ids = set(Vulnerabilities.objects.values_list('vulId', flat=True))
             count = 0
 
             if len(existing_vul_ids) == 0:
                 for result in results:
                     vul_id = result.get("id")
+                    organization_id = result.get("organization_id")
 
                     if vul_id not in existing_vul_ids:
                         priority_mapping = {
@@ -34,22 +34,29 @@ def call_create_ticket():
                             "critical": 4
                         }
 
-                        priority = result.get("patch_priority", "").lower()
+                        priority = result.get("severity", "").lower()
                         mapped_priority = priority_mapping.get(priority, 0)
 
-                        # Fetch associated data from exploits and patch tables
-                        cursor.execute("SELECT * FROM exploits WHERE vul_id = %s", (vul_id,))
+                        cursor.execute("SELECT * FROM exploits WHERE vul_id = %s AND organization_id = %s", (vul_id, organization_id))
                         exploits = cursor.fetchall()
 
                         cursor.execute("SELECT * FROM patch WHERE vul_id = %s", (vul_id,))
                         patches = cursor.fetchall()
+
+                        patchos = ""
                         if len(patches) != 0:
-                            # Assuming 'os' field in patches[0] contains a JSON string
                             os_data = json.loads(patches[0].get('os'))
                             if len(os_data) != 0:
                                 patchos = ", ".join([f"{item['os_name']} - {item['os_version']}" for item in os_data])
 
+                        cursor.execute("SELECT * FROM ticketing_tool WHERE organization_id = %s AND type = 'Freshservice'", (organization_id,))
+                        ticketing_tool = cursor.fetchone()
 
+                        if not ticketing_tool:
+                            continue
+
+                        freshservice_url = ticketing_tool.get("url") + "/api/v2/tickets"
+                        freshservice_key = ticketing_tool.get("key")
 
                         combined_data = {
                             "description": result.get("description", "").replace("'", '"'),
@@ -74,13 +81,13 @@ def call_create_ticket():
                             }
                         }
 
-                        url = config("FRESHSERVICE_API_URL")
+
                         headers = {
                             "Content-Type": "application/json",
-                            "Authorization": f"Basic {config('FRESHSERVICE_API_AUTH')}"
+                            "Authorization": f"Basic {freshservice_key}"
                         }
 
-                        response = requests.post(url, json=combined_data, headers=headers)
+                        response = requests.post(freshservice_url, json=combined_data, headers=headers)
 
                         if response.status_code == 201:
                             Vulnerabilities.objects.create(vulId=vul_id)
@@ -102,6 +109,8 @@ def call_create_ticket():
 
                     for vul in new_vulnerabilities:
                         vul_id = vul.get("id")
+                        organization_id = vul.get("organization_id")
+
                         priority_mapping = {
                             "low": 1,
                             "medium": 2,
@@ -109,19 +118,29 @@ def call_create_ticket():
                             "critical": 4
                         }
 
-                        priority = vul.get("patch_priority", "").lower()
+                        priority = vul.get("severity", "").lower()
                         mapped_priority = priority_mapping.get(priority, 0)
 
-                        # Fetch associated data from exploits and patch tables
-                        cursor.execute("SELECT * FROM exploits WHERE vul_id = %s", (vul_id,))
+                        cursor.execute("SELECT * FROM exploits WHERE vul_id = %s AND organization_id = %s", (vul_id, organization_id))
                         exploits = cursor.fetchall()
 
                         cursor.execute("SELECT * FROM patch WHERE vul_id = %s", (vul_id,))
                         patches = cursor.fetchall()
+
+                        patchos = ""
                         if len(patches) != 0:
                             os_data = json.loads(patches[0].get('os'))
                             if len(os_data) != 0:
                                 patchos = ", ".join([f"{item['os_name']} - {item['os_version']}" for item in os_data])
+
+                        cursor.execute("SELECT * FROM ticketing_tool WHERE organization_id = %s AND type = 'Freshservice'", (organization_id,))
+                        ticketing_tool = cursor.fetchone()
+
+                        if not ticketing_tool:
+                            continue
+
+                        freshservice_url = ticketing_tool.get("url")+ "/api/v2/tickets"
+                        freshservice_key = ticketing_tool.get("key")
 
                         combined_data = {
                             "description": vul.get("description", "").replace("'", '"'),
@@ -146,13 +165,12 @@ def call_create_ticket():
                             }
                         }
 
-                        url = config("FRESHSERVICE_API_URL")
                         headers = {
                             "Content-Type": "application/json",
-                            "Authorization": f"Basic {config('FRESHSERVICE_API_AUTH')}"
+                            "Authorization": f"Basic {freshservice_key}"
                         }
 
-                        response = requests.post(url, json=combined_data, headers=headers)
+                        response = requests.post(freshservice_url, json=combined_data, headers=headers)
 
                         if response.status_code == 201:
                             Vulnerabilities.objects.create(vulId=vul_id)
@@ -169,7 +187,6 @@ def call_create_ticket():
     finally:
         if connection.is_connected():
             connection.close()
-
 
 
 
