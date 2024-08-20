@@ -16,47 +16,71 @@ def test(request):
         "message":"Hello World!"
     })
 
+FRESHSERVICE_ACCOUNTS = [
+    {
+        "domain": "secqureone770.freshservice.com",
+        "api_key": "cXZwcWhEcVJYdTh3WkltUW9aTw=="
+    },
+    {
+        "domain": "sq1.freshservice.com",
+        "api_key": "RElKcG5MOEFtcjBtNW53T2JySg=="
+    }
+]
+
 @csrf_exempt
 def delete_all_tickets(request):
-    freshservice_domain = "secqureone770.freshservice.com"
-    api_key = "cXZwcWhEcVJYdTh3WkltUW9aTw=="
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Basic {api_key}"
-    }
+    def delete_tickets_for_account(domain, api_key):
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Basic {api_key}"
+        }
+        tickets_url = f"https://{domain}/api/v2/tickets"
+        params = {
+            "per_page": 100  # Fetch 100 tickets per page (maximum limit)
+        }
 
-    tickets_url = f"https://{freshservice_domain}/api/v2/tickets"
-    params = {
-        "per_page": 100  # Fetch 100 tickets per page (maximum limit)
-    }
+        try:
+            while True:
+                response = requests.get(tickets_url, headers=headers, params=params)
+                if response.status_code != 200:
+                    return {"error": f"Failed to fetch tickets from {domain}: {response.json()}"}, response.status_code
 
-    try:
-        while True:
-            response = requests.get(tickets_url, headers=headers, params=params)
-            if response.status_code != 200:
-                return JsonResponse({"error": f"Failed to fetch tickets: {response.json()}"}, status=response.status_code)
+                tickets = response.json().get("tickets", [])
+                if not tickets:
+                    return {"message": f"No tickets found or all tickets have been deleted on {domain}."}, 200
 
-            tickets = response.json().get("tickets", [])
-            if not tickets:
-                return JsonResponse({"message": "No tickets found or all tickets have been deleted."}, status=200)
+                # Delete each ticket
+                for ticket in tickets:
+                    ticket_id = ticket.get("id")
+                    delete_url = f"{tickets_url}/{ticket_id}"
+                    delete_response = requests.delete(delete_url, headers=headers)
 
-            # Delete each ticket
-            for ticket in tickets:
-                ticket_id = ticket.get("id")
-                delete_url = f"{tickets_url}/{ticket_id}"
-                delete_response = requests.delete(delete_url, headers=headers)
+                    if delete_response.status_code == 204:
+                        print(f"Ticket {ticket_id} deleted successfully on {domain}.")
+                    else:
+                        print(f"Failed to delete ticket {ticket_id} on {domain}: {delete_response.json()}")
 
-                if delete_response.status_code == 204:
-                    print(f"Ticket {ticket_id} deleted successfully.")
-                else:
-                    print(f"Failed to delete ticket {ticket_id}: {delete_response.json()}")
+                # Check if there are more pages
+                if "next_page" not in response.json():
+                    break
 
-            # Check if there are more pages
-            if "next_page" not in response.json():
-                break
+            return {"message": f"All tickets have been deleted on {domain}."}, 200
 
-        return JsonResponse({"message": "All tickets have been deleted."}, status=200)
+        except Exception as e:
+            return {"error": str(e)}, 500
 
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+    results = []
+    for account in FRESHSERVICE_ACCOUNTS:
+        domain = account["domain"]
+        api_key = account["api_key"]
+        result, status_code = delete_tickets_for_account(domain, api_key)
+        results.append({"domain": domain, "result": result, "status_code": status_code})
+
+    # Aggregate results
+    error_messages = [result["error"] for result in results if "error" in result["result"]]
+    success_messages = [result["result"]["message"] for result in results if "message" in result["result"]]
+
+    if error_messages:
+        return JsonResponse({"errors": error_messages}, status=500)
     
+    return JsonResponse({"messages": success_messages}, status=200)    

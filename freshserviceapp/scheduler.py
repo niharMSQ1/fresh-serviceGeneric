@@ -3,7 +3,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 import requests
 from decouple import config
 from .dbUtils import get_connection
-from .models import Vulnerabilities
+from .models import *
 from django.http import JsonResponse
 import json
 
@@ -58,8 +58,16 @@ def call_create_ticket():
                         freshservice_url = ticketing_tool.get("url") + "/api/v2/tickets"
                         freshservice_key = ticketing_tool.get("key")
 
+                        MAX_DESCRIPTION_LENGTH = 200
+                        CONTACT_MESSAGE = "......please contact SQ1 support"
+
+                        exploitsdescription = exploits[0].get("description", "").replace("'", '"') if exploits else ""
+                        if len(exploitsdescription) > MAX_DESCRIPTION_LENGTH:
+                            exploitsdescription = exploitsdescription[:MAX_DESCRIPTION_LENGTH] + CONTACT_MESSAGE
+
                         combined_data = {
                             "description": result.get("description", "").replace("'", '"'),
+                           
                             "subject": result.get("name"),
                             "email": "ram@freshservice.com",
                             "priority": mapped_priority,
@@ -75,11 +83,12 @@ def call_create_ticket():
                                 "patchurl": patches[0].get("url") if patches else None,
                                 "patchos": patchos if patches else None,
                                 "exploitsname": exploits[0].get("name") if exploits else None,
-                                "exploitsdescription": exploits[0].get("description", "").replace("'", '"') if exploits else None,
+                                "exploitsdescription": exploitsdescription,
                                 "exploitscomplexity": exploits[0].get("complexity") if exploits else None,
                                 "exploitsdependency": exploits[0].get("dependency") if exploits else None
                             }
                         }
+
 
 
                         headers = {
@@ -90,11 +99,11 @@ def call_create_ticket():
                         response = requests.post(freshservice_url, json=combined_data, headers=headers)
 
                         if response.status_code == 201:
-                            Vulnerabilities.objects.create(vulId=vul_id)
+                            Vulnerabilities.objects.create(vulId=vul_id,ticketServicePlatform =  [key for key, value in TICKET_TYPE_CHOICES if value == 'JIRA'][0] , organizationId = organization_id, createdTicketId =response.json()['ticket'].get("id") )
                             count += 1
                             print(f"Ticket created successfully for vulnerability {vul_id} (Count: {count})")
                         else:
-                            print(f"Failed to create ticket for vulnerability {vul_id}: {response.json()}")
+                            print(f"Failed to create ticket for vulnerability {freshservice_url} {vul_id}: {response.json()}")
 
                 return JsonResponse({"message": f"{count} tickets created successfully."}, status=200)
 
@@ -142,9 +151,17 @@ def call_create_ticket():
                         freshservice_url = ticketing_tool.get("url")+ "/api/v2/tickets"
                         freshservice_key = ticketing_tool.get("key")
 
+                        MAX_DESCRIPTION_LENGTH = 200
+                        CONTACT_MESSAGE = "......please contact SQ1 support"
+
+                        exploitsdescription = exploits[0].get("description", "").replace("'", '"') if exploits else ""
+                        if len(exploitsdescription) > MAX_DESCRIPTION_LENGTH:
+                            exploitsdescription = exploitsdescription[:MAX_DESCRIPTION_LENGTH] + CONTACT_MESSAGE
+
                         combined_data = {
-                            "description": vul.get("description", "").replace("'", '"'),
-                            "subject": vul.get("name"),
+                            "description": result.get("description", "").replace("'", '"'),
+                           
+                            "subject": result.get("name"),
                             "email": "ram@freshservice.com",
                             "priority": mapped_priority,
                             "status": 2,
@@ -159,11 +176,12 @@ def call_create_ticket():
                                 "patchurl": patches[0].get("url") if patches else None,
                                 "patchos": patchos if patches else None,
                                 "exploitsname": exploits[0].get("name") if exploits else None,
-                                "exploitsdescription": exploits[0].get("description", "").replace("'", '"') if exploits else None,
+                                "exploitsdescription": exploitsdescription,
                                 "exploitscomplexity": exploits[0].get("complexity") if exploits else None,
                                 "exploitsdependency": exploits[0].get("dependency") if exploits else None
                             }
                         }
+
 
                         headers = {
                             "Content-Type": "application/json",
@@ -173,7 +191,7 @@ def call_create_ticket():
                         response = requests.post(freshservice_url, json=combined_data, headers=headers)
 
                         if response.status_code == 201:
-                            Vulnerabilities.objects.create(vulId=vul_id)
+                            Vulnerabilities.objects.create(vulId=vul_id,ticketServicePlatform =  [key for key, value in TICKET_TYPE_CHOICES if value == 'JIRA'][0] , organizationId = organization_id, createdTicketId =response.json()['ticket'].get("id") )
                             count += 1
                             print(f"Ticket created successfully for vulnerability {vul_id} (Count: {count})")
                         else:
