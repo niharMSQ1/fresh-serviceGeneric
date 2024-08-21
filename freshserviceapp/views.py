@@ -84,3 +84,20 @@ def delete_all_tickets(request):
         return JsonResponse({"errors": error_messages}, status=500)
     
     return JsonResponse({"messages": success_messages}, status=200)    
+
+@csrf_exempt
+def gaut(request):
+    from .scheduler import get_all_tickets_and_update
+    req = get_all_tickets_and_update()
+    return JsonResponse({
+        "message":req
+    })
+
+
+@csrf_exempt
+def createTicketManually(request):
+    from .scheduler import call_create_ticket
+    req = call_create_ticket()
+    return JsonResponse({
+        "message":"hello world"
+    })

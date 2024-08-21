@@ -100,6 +100,50 @@ def call_create_ticket():
 
                         if response.status_code == 201:
                             Vulnerabilities.objects.create(vulId=vul_id,ticketServicePlatform =  [key for key, value in TICKET_TYPE_CHOICES if value == 'JIRA'][0] , organizationId = organization_id, createdTicketId =response.json()['ticket'].get("id") )
+                            
+                            ticket_data = (response.json()).get("ticket", {})
+
+                            TicketingServiceDetails.objects.create(
+                            ticketId=ticket_data.get("id", None),
+                            ticketServicePlatform=[key for key, value in TICKET_TYPE_CHOICES if value == 'JIRA'][0],
+                            plannedStartDate=ticket_data.get("planned_start_date") or None,
+                            plannedEffort=ticket_data.get("planned_end_date") or None,
+                            subject=ticket_data.get("subject", ""),
+                            group_id=ticket_data.get("group_id") or None,
+                            departmentId=ticket_data.get("department_id") or None,
+                            category=ticket_data.get("category") or None,
+                            subCategory=ticket_data.get("sub_category") or None,
+                            itemCategory=ticket_data.get("item_category") or None,
+                            requesterId=ticket_data.get("requestor_id") or None,
+                            responderId=ticket_data.get("responder_id") or None,
+                            emailConfigId=ticket_data.get("email_config_id") or None,
+                            fwdMails=ticket_data.get("fwd_mails", []),
+                            isEscalated=ticket_data.get("is_escalated", False),
+                            frDueBy=ticket_data.get("fr_due_by") or None,
+                            createdAt=ticket_data.get("created_at") or None,
+                            updatedAt=ticket_data.get("updated_at") or None,
+                            workSpaceId=ticket_data.get("workspace_id") or None,
+                            requestedForId=ticket_data.get("requested_for_id") or None,
+                            toEmails=ticket_data.get("to_emails", None),
+                            type=ticket_data.get("type", "Incident"),
+                            description=ticket_data.get("description_text", ""),
+                            descriptionHTML=ticket_data.get("description", ""),
+                            majorIncidentType=ticket_data.get("major_incident_type") or None,
+                            businessImpact=ticket_data.get("business_impact") or None,
+                            numberOfCustomersImpacted=ticket_data.get("no_of_customers_impacted") or None,
+                            patchComplexity=ticket_data.get("patchcomplexity") or None,
+                            patchUrl=ticket_data.get("patchurl", ""),
+                            patchOs=ticket_data.get("patchos", ""),
+                            exploitsName=ticket_data.get("exploitsname", ""),
+                            exploitsDescription=ticket_data.get("exploitsdescription", ""),
+                            exploitsComplexity=ticket_data.get("exploitscomplexity") or None,
+                            exploitsDependency=ticket_data.get("exploitsdependency") or None,
+                            tags=ticket_data.get("tags", []),
+                            tasksDependencyType=ticket_data.get("tasks_dependency_type") or None,
+                            resolutionNotes=ticket_data.get("resolution_notes") or None,
+                            resolutionNotesHTML=ticket_data.get("resolution_notes_html") or None,
+                            attachments=ticket_data.get("attachments", [])
+                            )
                             count += 1
                             print(f"Ticket created successfully for vulnerability {vul_id} (Count: {count})")
                         else:
@@ -116,9 +160,9 @@ def call_create_ticket():
                 elif results[0]["id"] > latest_existing_id:
                     new_vulnerabilities = [vul for vul in results if vul["id"] > latest_existing_id]
 
-                    for vul in new_vulnerabilities:
-                        vul_id = vul.get("id")
-                        organization_id = vul.get("organization_id")
+                    for result in new_vulnerabilities:
+                        vul_id = result.get("id")
+                        organization_id = result.get("organization_id")
 
                         priority_mapping = {
                             "low": 1,
@@ -127,7 +171,7 @@ def call_create_ticket():
                             "critical": 4
                         }
 
-                        priority = vul.get("severity", "").lower()
+                        priority = result.get("severity", "").lower()
                         mapped_priority = priority_mapping.get(priority, 0)
 
                         cursor.execute("SELECT * FROM exploits WHERE vul_id = %s AND organization_id = %s", (vul_id, organization_id))
@@ -183,6 +227,7 @@ def call_create_ticket():
                         }
 
 
+
                         headers = {
                             "Content-Type": "application/json",
                             "Authorization": f"Basic {freshservice_key}"
@@ -192,6 +237,50 @@ def call_create_ticket():
 
                         if response.status_code == 201:
                             Vulnerabilities.objects.create(vulId=vul_id,ticketServicePlatform =  [key for key, value in TICKET_TYPE_CHOICES if value == 'JIRA'][0] , organizationId = organization_id, createdTicketId =response.json()['ticket'].get("id") )
+
+                            ticket_data = (response.json()).get("ticket", {})
+
+                            TicketingServiceDetails.objects.create(
+                            ticketId=ticket_data.get("id", None),
+                            ticketServicePlatform=[key for key, value in TICKET_TYPE_CHOICES if value == 'JIRA'][0],
+                            plannedStartDate=ticket_data.get("planned_start_date") or None,
+                            plannedEffort=ticket_data.get("planned_end_date") or None,
+                            subject=ticket_data.get("subject", ""),
+                            group_id=ticket_data.get("group_id") or None,
+                            departmentId=ticket_data.get("department_id") or None,
+                            category=ticket_data.get("category") or None,
+                            subCategory=ticket_data.get("sub_category") or None,
+                            itemCategory=ticket_data.get("item_category") or None,
+                            requesterId=ticket_data.get("requestor_id") or None,
+                            responderId=ticket_data.get("responder_id") or None,
+                            emailConfigId=ticket_data.get("email_config_id") or None,
+                            fwdMails=ticket_data.get("fwd_mails", []),
+                            isEscalated=ticket_data.get("is_escalated", False),
+                            frDueBy=ticket_data.get("fr_due_by") or None,
+                            createdAt=ticket_data.get("created_at") or None,
+                            updatedAt=ticket_data.get("updated_at") or None,
+                            workSpaceId=ticket_data.get("workspace_id") or None,
+                            requestedForId=ticket_data.get("requested_for_id") or None,
+                            toEmails=ticket_data.get("to_emails", None),
+                            type=ticket_data.get("type", "Incident"),
+                            description=ticket_data.get("description_text", ""),
+                            descriptionHTML=ticket_data.get("description", ""),
+                            majorIncidentType=ticket_data.get("major_incident_type") or None,
+                            businessImpact=ticket_data.get("business_impact") or None,
+                            numberOfCustomersImpacted=ticket_data.get("no_of_customers_impacted") or None,
+                            patchComplexity=ticket_data.get("patchcomplexity") or None,
+                            patchUrl=ticket_data.get("patchurl", ""),
+                            patchOs=ticket_data.get("patchos", ""),
+                            exploitsName=ticket_data.get("exploitsname", ""),
+                            exploitsDescription=ticket_data.get("exploitsdescription", ""),
+                            exploitsComplexity=ticket_data.get("exploitscomplexity") or None,
+                            exploitsDependency=ticket_data.get("exploitsdependency") or None,
+                            tags=ticket_data.get("tags", []),
+                            tasksDependencyType=ticket_data.get("tasks_dependency_type") or None,
+                            resolutionNotes=ticket_data.get("resolution_notes") or None,
+                            resolutionNotesHTML=ticket_data.get("resolution_notes_html") or None,
+                            attachments=ticket_data.get("attachments", [])
+                            )
                             count += 1
                             print(f"Ticket created successfully for vulnerability {vul_id} (Count: {count})")
                         else:
@@ -207,24 +296,40 @@ def call_create_ticket():
             connection.close()
 
 
+def get_all_tickets_and_update():
+    url= "https://secqureone770.freshservice.com"+"/api/v2/tickets"
+    api_key= "cXZwcWhEcVJYdTh3WkltUW9aTw=="
 
-def check_closed_tickets():
-    url = "https://secqureone509.freshservice.com/api/v2/tickets"
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Basic {config('FRESHSERVICE_API_AUTH')}"
+    'Authorization': f'Basic {api_key}'
     }
 
+    # Make the GET request to fetch all tickets
     response = requests.get(url, headers=headers)
+    idd = []
+    for res in response.json()["tickets"]:
+        idd.append((res))
+    # idd.sort()
+    return idd
 
-    if response.status_code == 200:
-        tickets = response.json().get('tickets', [])
-        print("Closed Tickets:")
-        for ticket in tickets:
-            print(f"Ticket ID: {ticket['id']}, Subject: {ticket['subject']}, Status: {ticket['status']}")
-    else:
-        print(f"Failed to retrieve tickets. Status code: {response.status_code}")
-        print(response.json())
+
+# def check_closed_tickets():
+#     url = "https://secqureone509.freshservice.com/api/v2/tickets"
+#     headers = {
+#         "Content-Type": "application/json",
+#         "Authorization": f"Basic {config('FRESHSERVICE_API_AUTH')}"
+#     }
+
+#     response = requests.get(url, headers=headers)
+
+#     if response.status_code == 200:
+#         tickets = response.json().get('tickets', [])
+#         print("Closed Tickets:")
+#         for ticket in tickets:
+#             print(f"Ticket ID: {ticket['id']}, Subject: {ticket['subject']}, Status: {ticket['status']}")
+#     else:
+#         print(f"Failed to retrieve tickets. Status code: {response.status_code}")
+#         print(response.json())
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
