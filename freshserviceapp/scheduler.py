@@ -601,6 +601,6 @@ def get_all_tickets_and_update():
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    scheduler.add_job(call_create_ticket, IntervalTrigger(minutes=0.5))
+    # scheduler.add_job(call_create_ticket, IntervalTrigger(minutes=0.5))
     # scheduler.add_job(check_closed_tickets, IntervalTrigger(minutes=0.25))
     scheduler.start()
