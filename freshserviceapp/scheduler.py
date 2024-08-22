@@ -27,15 +27,20 @@ def call_create_ticket():
                     organization_id = result.get("organization_id")
 
                     if vul_id not in existing_vul_ids:
-                        priority_mapping = {
-                            "low": 1,
-                            "medium": 2,
-                            "high": 3,
-                            "critical": 4
-                        }
+                        
 
-                        priority = result.get("severity", "").lower()
-                        mapped_priority = priority_mapping.get(priority, 0)
+                        mapped_priority = None
+
+                        risk = float(result.get("risk"))
+
+                        if 9.0 <= risk <= 10.0:
+                            mapped_priority = 4
+                        elif 7.0 <= risk <= 8.9:
+                            mapped_priority = 3
+                        elif 4.0 <= risk <= 6.9:
+                            mapped_priority = 2
+                        elif 0.1 <= risk <= 3.9:
+                            mapped_priority = 1
 
                         cursor.execute("SELECT * FROM exploits WHERE vul_id = %s AND organization_id = %s", (vul_id, organization_id))
                         exploits = cursor.fetchall()
@@ -43,53 +48,183 @@ def call_create_ticket():
                         cursor.execute("SELECT * FROM patch WHERE vul_id = %s", (vul_id,))
                         patches = cursor.fetchall()
 
-                        patchos = ""
-                        if len(patches) != 0:
-                            os_data = json.loads(patches[0].get('os'))
-                            if len(os_data) != 0:
-                                patchos = ", ".join([f"{item['os_name']} - {item['os_version']}" for item in os_data])
-
                         cursor.execute("SELECT * FROM ticketing_tool WHERE organization_id = %s AND type = 'Freshservice'", (organization_id,))
                         ticketing_tool = cursor.fetchone()
 
                         if not ticketing_tool:
                             continue
 
-                        freshservice_url = ticketing_tool.get("url") + "/api/v2/tickets"
+                        freshservice_url = f"{ticketing_tool.get('url')}/api/v2/tickets"
                         freshservice_key = ticketing_tool.get("key")
 
-                        MAX_DESCRIPTION_LENGTH = 200
-                        CONTACT_MESSAGE = "......please contact SQ1 support"
+                        detection_summary_table = ""
 
-                        exploitsdescription = exploits[0].get("description", "").replace("'", '"') if exploits else ""
-                        if len(exploitsdescription) > MAX_DESCRIPTION_LENGTH:
-                            exploitsdescription = exploitsdescription[:MAX_DESCRIPTION_LENGTH] + CONTACT_MESSAGE
+                        if result:
+                            detection_summary_table = f"""
+                                <br><br>
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Detection summary:</strong>
+                                </div>
+                                <br>
+                                <table style="border-collapse: collapse; width: 100%; border: 3px solid black; box-shadow: 0 0 5px blue; font-family: Arial, sans-serif; font-size: 16px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">CVE</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Severity</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">First identified on</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Last identified on</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch priority</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td style="border: 1px solid black; padding: 8px;">{", ".join(json.loads((result['CVEs'].replace("'", '"')))["cves"])}</td>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['severity'].replace("'", '"')}</td>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['first_seen']}</td>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['last_identified_on']}</td>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['patch_priority']}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <br>
+                            """
+                        else:
+                            detection_summary_table = """
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Detection Table:</strong> Nothing detected.
+                                </div>
+                                <br>
+                            """
+
+                        remediation_table = ""
+
+                        if result:
+                            remediation_table = f"""
+                                <br><br>
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Remediation Table:</strong>
+                                </div>
+                                <br>
+                                <table style="border-collapse: collapse; width: 100%; border: 3px solid black; box-shadow: 0 0 5px blue; font-family: Arial, sans-serif; font-size: 16px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Solution Patch</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Solution workaround</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Preventive measure</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['solution_patch']}</td>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['solution_workaround']}</td>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['preventive_measure']}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <br>
+                            """
+                        else:
+                            remediation_table = """
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Remediation Table:</strong>Kindly wait for remedies.
+                                </div>
+                                <br>
+                            """
+                        
+
+                        exploits_table_html = ""
+
+                        if exploits:
+                            exploits_table_html = f"""
+                                <br><br>
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Exploits Table:</strong>
+                                </div>
+                                <br>
+                                <table style="border-collapse: collapse; width: 100%; border: 3px solid black; box-shadow: 0 0 5px blue; font-family: Arial, sans-serif; font-size: 16px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Exploits name</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Exploits description</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Exploits complexity</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Exploits dependency</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {"".join(
+                                            f"<tr>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{exploit['name']}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{exploit['description'].replace("'", '"')}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{exploit['complexity']}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{'Dependent on other exploits' if exploit['dependency'].lower() == 'yes' else 'Self exploitable'}</td>"
+                                            f"</tr>"
+                                            for exploit in exploits
+                                        )}
+                                    </tbody>
+                                </table>
+                                <br>
+                            """
+                        else:
+                            exploits_table_html = """
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Exploits Table:</strong> No exploits exist for this vulnerability.
+                                </div>
+                                <br>
+                            """
+
+                        patch_table_html = ""
+
+                        if patches:
+                            patch_table_html = f"""
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Patch Table:</strong>
+                                </div>
+                                <br>
+                                <table style="border-collapse: collapse; width: 100%; border: 3px solid black; box-shadow: 0 0 5px blue; font-family: Arial, sans-serif; font-size: 16px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch solution</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch description</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch complexity</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch url</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch type</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch os</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {"".join(
+                                            f"<tr>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{patch['solution']}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{patch['description'].replace("'", '"')}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{patch['complexity']}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'><a href='{patch['url']}'>{patch['url']}</a></td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{patch['type']}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{', '.join([f'{os_item["os_name"]} {os_item["os_version"]}' for os_item in json.loads(patch['os'])])}</td>"
+                                            f"</tr>"
+                                            for patch in patches
+                                        )}
+                                    </tbody>
+                                </table>
+                                <br>
+                            """
+                        else:
+                            patch_table_html = """
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Patch Table:</strong> No patches exist for this vulnerability.
+                                </div>
+                                <br>
+                            """
 
                         combined_data = {
-                            "description": result.get("description", "").replace("'", '"'),
-                           
+                            "description": result.get("description", "").replace("'", '"') + detection_summary_table+remediation_table+ exploits_table_html + patch_table_html,
                             "subject": result.get("name"),
                             "email": "ram@freshservice.com",
-                            "priority": mapped_priority,
+                            "priority": 4,
                             "status": 2,
                             "cc_emails": ["ram@freshservice.com", "diana@freshservice.com"],
                             "workspace_id": 2,
-                            "urgency": 3,
-                            "custom_fields": {
-                                "major_incident_type": None,
-                                "business_impact": None,
-                                "impacted_locations": None,
-                                "patchcomplexity": patches[0].get("complexity") if patches else None,
-                                "patchurl": patches[0].get("url") if patches else None,
-                                "patchos": patchos if patches else None,
-                                "exploitsname": exploits[0].get("name") if exploits else None,
-                                "exploitsdescription": exploitsdescription,
-                                "exploitscomplexity": exploits[0].get("complexity") if exploits else None,
-                                "exploitsdependency": exploits[0].get("dependency") if exploits else None
-                            }
+                            "urgency": mapped_priority,
                         }
-
-
 
                         headers = {
                             "Content-Type": "application/json",
@@ -99,13 +234,13 @@ def call_create_ticket():
                         response = requests.post(freshservice_url, json=combined_data, headers=headers)
 
                         if response.status_code == 201:
-                            Vulnerabilities.objects.create(vulId=vul_id,ticketServicePlatform =  [key for key, value in TICKET_TYPE_CHOICES if value == 'JIRA'][0] , organizationId = organization_id, createdTicketId =response.json()['ticket'].get("id") )
+                            Vulnerabilities.objects.create(vulId=vul_id,ticketServicePlatform =  [key for key, value in TICKET_TYPE_CHOICES if value == 'Freshservice'][0] , organizationId = organization_id, createdTicketId =response.json()['ticket'].get("id") )
                             
                             ticket_data = (response.json()).get("ticket", {})
 
                             TicketingServiceDetails.objects.create(
                             ticketId=ticket_data.get("id", None),
-                            ticketServicePlatform=[key for key, value in TICKET_TYPE_CHOICES if value == 'JIRA'][0],
+                            ticketServicePlatform=[key for key, value in TICKET_TYPE_CHOICES if value == 'Freshservice'][0],
                             plannedStartDate=ticket_data.get("planned_start_date") or None,
                             plannedEffort=ticket_data.get("planned_end_date") or None,
                             subject=ticket_data.get("subject", ""),
@@ -164,15 +299,18 @@ def call_create_ticket():
                         vul_id = result.get("id")
                         organization_id = result.get("organization_id")
 
-                        priority_mapping = {
-                            "low": 1,
-                            "medium": 2,
-                            "high": 3,
-                            "critical": 4
-                        }
+                        mapped_priority = None
 
-                        priority = result.get("severity", "").lower()
-                        mapped_priority = priority_mapping.get(priority, 0)
+                        risk = float(result.get("risk"))
+
+                        if 9.0 <= risk <= 10.0:
+                            mapped_priority = 4
+                        elif 7.0 <= risk <= 8.9:
+                            mapped_priority = 3
+                        elif 4.0 <= risk <= 6.9:
+                            mapped_priority = 2
+                        elif 0.1 <= risk <= 3.9:
+                            mapped_priority = 1
 
                         cursor.execute("SELECT * FROM exploits WHERE vul_id = %s AND organization_id = %s", (vul_id, organization_id))
                         exploits = cursor.fetchall()
@@ -180,53 +318,183 @@ def call_create_ticket():
                         cursor.execute("SELECT * FROM patch WHERE vul_id = %s", (vul_id,))
                         patches = cursor.fetchall()
 
-                        patchos = ""
-                        if len(patches) != 0:
-                            os_data = json.loads(patches[0].get('os'))
-                            if len(os_data) != 0:
-                                patchos = ", ".join([f"{item['os_name']} - {item['os_version']}" for item in os_data])
-
                         cursor.execute("SELECT * FROM ticketing_tool WHERE organization_id = %s AND type = 'Freshservice'", (organization_id,))
                         ticketing_tool = cursor.fetchone()
 
                         if not ticketing_tool:
                             continue
 
-                        freshservice_url = ticketing_tool.get("url")+ "/api/v2/tickets"
+                        freshservice_url = f"{ticketing_tool.get('url')}/api/v2/tickets"
                         freshservice_key = ticketing_tool.get("key")
 
-                        MAX_DESCRIPTION_LENGTH = 200
-                        CONTACT_MESSAGE = "......please contact SQ1 support"
+                        detection_summary_table = ""
 
-                        exploitsdescription = exploits[0].get("description", "").replace("'", '"') if exploits else ""
-                        if len(exploitsdescription) > MAX_DESCRIPTION_LENGTH:
-                            exploitsdescription = exploitsdescription[:MAX_DESCRIPTION_LENGTH] + CONTACT_MESSAGE
+                        if result:
+                            detection_summary_table = f"""
+                                <br><br>
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Detection summary:</strong>
+                                </div>
+                                <br>
+                                <table style="border-collapse: collapse; width: 100%; border: 3px solid black; box-shadow: 0 0 5px blue; font-family: Arial, sans-serif; font-size: 16px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">CVE</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Severity</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">First identified on</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Last identified on</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch priority</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td style="border: 1px solid black; padding: 8px;">{", ".join(json.loads((result['CVEs'].replace("'", '"')))["cves"])}</td>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['severity'].replace("'", '"')}</td>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['first_seen']}</td>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['last_identified_on']}</td>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['patch_priority']}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <br>
+                            """
+                        else:
+                            detection_summary_table = """
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Detection Table:</strong> Nothing detected.
+                                </div>
+                                <br>
+                            """
+
+                        remediation_table = ""
+
+                        if result:
+                            remediation_table = f"""
+                                <br><br>
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Remediation Table:</strong>
+                                </div>
+                                <br>
+                                <table style="border-collapse: collapse; width: 100%; border: 3px solid black; box-shadow: 0 0 5px blue; font-family: Arial, sans-serif; font-size: 16px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Solution Patch</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Solution workaround</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Preventive measure</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['solution_patch']}</td>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['solution_workaround']}</td>
+                                            <td style="border: 1px solid black; padding: 8px;">{result['preventive_measure']}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <br>
+                            """
+                        else:
+                            remediation_table = """
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Remediation Table:</strong>Kindly wait for remedies.
+                                </div>
+                                <br>
+                            """
+                        
+
+                        exploits_table_html = ""
+
+                        if exploits:
+                            exploits_table_html = f"""
+                                <br><br>
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Exploits Table:</strong>
+                                </div>
+                                <br>
+                                <table style="border-collapse: collapse; width: 100%; border: 3px solid black; box-shadow: 0 0 5px blue; font-family: Arial, sans-serif; font-size: 16px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Exploits name</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Exploits description</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Exploits complexity</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Exploits dependency</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {"".join(
+                                            f"<tr>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{exploit['name']}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{exploit['description'].replace("'", '"')}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{exploit['complexity']}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{'Dependent on other exploits' if exploit['dependency'].lower() == 'yes' else 'Self exploitable'}</td>"
+                                            f"</tr>"
+                                            for exploit in exploits
+                                        )}
+                                    </tbody>
+                                </table>
+                                <br>
+                            """
+                        else:
+                            exploits_table_html = """
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Exploits Table:</strong> No exploits exist for this vulnerability.
+                                </div>
+                                <br>
+                            """
+
+                        patch_table_html = ""
+
+                        if patches:
+                            patch_table_html = f"""
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Patch Table:</strong>
+                                </div>
+                                <br>
+                                <table style="border-collapse: collapse; width: 100%; border: 3px solid black; box-shadow: 0 0 5px blue; font-family: Arial, sans-serif; font-size: 16px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch solution</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch description</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch complexity</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch url</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch type</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Patch os</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {"".join(
+                                            f"<tr>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{patch['solution']}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{patch['description'].replace("'", '"')}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{patch['complexity']}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'><a href='{patch['url']}'>{patch['url']}</a></td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{patch['type']}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{', '.join([f'{os_item["os_name"]} {os_item["os_version"]}' for os_item in json.loads(patch['os'])])}</td>"
+                                            f"</tr>"
+                                            for patch in patches
+                                        )}
+                                    </tbody>
+                                </table>
+                                <br>
+                            """
+                        else:
+                            patch_table_html = """
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Patch Table:</strong> No patches exist for this vulnerability.
+                                </div>
+                                <br>
+                            """
 
                         combined_data = {
-                            "description": result.get("description", "").replace("'", '"'),
-                           
+                            "description": result.get("description", "").replace("'", '"') + detection_summary_table+remediation_table+ exploits_table_html + patch_table_html,
                             "subject": result.get("name"),
                             "email": "ram@freshservice.com",
-                            "priority": mapped_priority,
+                            "priority": 4,
                             "status": 2,
                             "cc_emails": ["ram@freshservice.com", "diana@freshservice.com"],
                             "workspace_id": 2,
-                            "urgency": 3,
-                            "custom_fields": {
-                                "major_incident_type": None,
-                                "business_impact": None,
-                                "impacted_locations": None,
-                                "patchcomplexity": patches[0].get("complexity") if patches else None,
-                                "patchurl": patches[0].get("url") if patches else None,
-                                "patchos": patchos if patches else None,
-                                "exploitsname": exploits[0].get("name") if exploits else None,
-                                "exploitsdescription": exploitsdescription,
-                                "exploitscomplexity": exploits[0].get("complexity") if exploits else None,
-                                "exploitsdependency": exploits[0].get("dependency") if exploits else None
-                            }
+                            "urgency": mapped_priority,
                         }
-
-
 
                         headers = {
                             "Content-Type": "application/json",
@@ -236,13 +504,13 @@ def call_create_ticket():
                         response = requests.post(freshservice_url, json=combined_data, headers=headers)
 
                         if response.status_code == 201:
-                            Vulnerabilities.objects.create(vulId=vul_id,ticketServicePlatform =  [key for key, value in TICKET_TYPE_CHOICES if value == 'JIRA'][0] , organizationId = organization_id, createdTicketId =response.json()['ticket'].get("id") )
-
+                            Vulnerabilities.objects.create(vulId=vul_id,ticketServicePlatform =  [key for key, value in TICKET_TYPE_CHOICES if value == 'Freshservice'][0] , organizationId = organization_id, createdTicketId =response.json()['ticket'].get("id") )
+                            
                             ticket_data = (response.json()).get("ticket", {})
 
                             TicketingServiceDetails.objects.create(
                             ticketId=ticket_data.get("id", None),
-                            ticketServicePlatform=[key for key, value in TICKET_TYPE_CHOICES if value == 'JIRA'][0],
+                            ticketServicePlatform=[key for key, value in TICKET_TYPE_CHOICES if value == 'Freshservice'][0],
                             plannedStartDate=ticket_data.get("planned_start_date") or None,
                             plannedEffort=ticket_data.get("planned_end_date") or None,
                             subject=ticket_data.get("subject", ""),
@@ -333,6 +601,6 @@ def get_all_tickets_and_update():
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    # scheduler.add_job(call_create_ticket, IntervalTrigger(minutes=0.5))
+    scheduler.add_job(call_create_ticket, IntervalTrigger(minutes=0.5))
     # scheduler.add_job(check_closed_tickets, IntervalTrigger(minutes=0.25))
     scheduler.start()
