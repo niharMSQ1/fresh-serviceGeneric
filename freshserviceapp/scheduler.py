@@ -27,6 +27,42 @@ def call_create_ticket():
                     organization_id = result.get("organization_id")
 
                     if vul_id not in existing_vul_ids:
+
+                        cursor.execute("""
+                        SELECT assetable_type, assetable_id
+                        FROM assetables
+                        WHERE vulnerabilities_id = %s
+                    """, (vul_id,))
+                    assetables_results = cursor.fetchall()
+
+                    assets = {
+                        "servers": [],
+                        "workstations": []
+                    }
+                    for assetable in assetables_results:
+                        assetable_type = assetable.get("assetable_type")
+                        assetable_id = assetable.get("assetable_id")
+
+                        if assetable_type == 'App\\Models\\Servers':
+                            cursor.execute("""
+                                SELECT host_name, ip_address
+                                FROM servers
+                                WHERE id = %s AND organization_id = %s
+                            """, (assetable_id, organization_id))
+                            server = cursor.fetchone()
+                            if server:
+                                assets["servers"].append(server)
+
+                        elif assetable_type == 'App\\Models\\Workstations':
+                            cursor.execute("""
+                                SELECT host_name, ip_address
+                                FROM workstations
+                                WHERE id = %s AND organization_id = %s
+                            """, (assetable_id, organization_id))
+                            workstation = cursor.fetchone()
+                            if workstation:
+                                assets["workstations"].append(workstation)
+                        print(assets)
                         
 
                         mapped_priority = None
@@ -215,8 +251,75 @@ def call_create_ticket():
                                 <br>
                             """
 
+                        workstation_table = ""
+                        if len(assets['workstations']) == 0:
+                            workstation_table = """
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Workstations:</strong>No Workstation is affected.
+                                </div>
+                                <br>
+                            """
+                        else:
+                            workstation_table = f"""
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Worstation Table:</strong>
+                                </div>
+                                <br>
+                                <table style="border-collapse: collapse; width: 100%; border: 3px solid black; box-shadow: 0 0 5px blue; font-family: Arial, sans-serif; font-size: 16px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Host name</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">IP address</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {"".join(
+                                            f"<tr>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{((assets['workstations'][0]).get('host_name'))}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{((assets['workstations'][0]).get('ip_address'))}</td>"
+                                            f"</tr>"
+                                        )}
+                                    </tbody>
+                                </table>
+                                <br>
+                            """
+
+
+                        servers_table = ""
+                        if len(assets['servers']) == 0:
+                            servers_table = """
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Servers:</strong>No Servers is affected.
+                                </div>
+                                <br>
+                            """
+                        else:
+                            servers_table = f"""
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Server Table:</strong>
+                                </div>
+                                <br>
+                                <table style="border-collapse: collapse; width: 100%; border: 3px solid black; box-shadow: 0 0 5px blue; font-family: Arial, sans-serif; font-size: 16px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Host name</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">IP address</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {"".join(
+                                            f"<tr>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{((assets['servers'][0]).get('host_name'))}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{((assets['servers'][0]).get('ip_address'))}</td>"
+                                            f"</tr>"
+                                        )}
+                                    </tbody>
+                                </table>
+                                <br>
+                            """
+
                         combined_data = {
-                            "description": result.get("description", "").replace("'", '"') + detection_summary_table+remediation_table+ exploits_table_html + patch_table_html,
+                            "description": result.get("description", "").replace("'", '"') + detection_summary_table+remediation_table+ exploits_table_html + patch_table_html+workstation_table+servers_table,
                             "subject": result.get("name"),
                             "email": "ram@freshservice.com",
                             "priority": 4,
@@ -232,6 +335,7 @@ def call_create_ticket():
                         }
 
                         response = requests.post(freshservice_url, json=combined_data, headers=headers)
+                        print(((response.json())['ticket'])['id'])
 
                         if response.status_code == 201:
                             Vulnerabilities.objects.create(vulId=vul_id,ticketServicePlatform =  [key for key, value in TICKET_TYPE_CHOICES if value == 'Freshservice'][0] , organizationId = organization_id, createdTicketId =response.json()['ticket'].get("id") )
@@ -485,8 +589,74 @@ def call_create_ticket():
                                 <br>
                             """
 
+                        workstation_table = ""
+                        if len(assets['workstations']) == 0:
+                            workstation_table = """
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Workstations:</strong>No Workstation is affected.
+                                </div>
+                                <br>
+                            """
+                        else:
+                            workstation_table = f"""
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Worstation Table:</strong>
+                                </div>
+                                <br>
+                                <table style="border-collapse: collapse; width: 100%; border: 3px solid black; box-shadow: 0 0 5px blue; font-family: Arial, sans-serif; font-size: 16px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Host name</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">IP address</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {"".join(
+                                            f"<tr>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{((assets['workstations'][0]).get('host_name'))}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{((assets['workstations'][0]).get('ip_address'))}</td>"
+                                            f"</tr>"
+                                        )}
+                                    </tbody>
+                                </table>
+                                <br>
+                            """
+
+
+                        servers_table = ""
+                        if len(assets['servers']) == 0:
+                            servers_table = """
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Servers:</strong>No Servers is affected.
+                                </div>
+                                <br>
+                            """
+                        else:
+                            servers_table = f"""
+                                <div dir="ltr" style="font-family: Arial, sans-serif; font-size: 16px;">
+                                    <strong>Server Table:</strong>
+                                </div>
+                                <br>
+                                <table style="border-collapse: collapse; width: 100%; border: 3px solid black; box-shadow: 0 0 5px blue; font-family: Arial, sans-serif; font-size: 16px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">Host name</th>
+                                            <th style="border: 1px solid black; font-weight: bold; padding: 8px; text-align: left;">IP address</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {"".join(
+                                            f"<tr>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{((assets['servers'][0]).get('host_name'))}</td>"
+                                            f"<td style='border: 1px solid black; padding: 8px;'>{((assets['servers'][0]).get('ip_address'))}</td>"
+                                            f"</tr>"
+                                        )}
+                                    </tbody>
+                                </table>
+                                <br>
+                            """
                         combined_data = {
-                            "description": result.get("description", "").replace("'", '"') + detection_summary_table+remediation_table+ exploits_table_html + patch_table_html,
+                            "description": result.get("description", "").replace("'", '"') + detection_summary_table+remediation_table+ exploits_table_html + patch_table_html+workstation_table+servers_table,
                             "subject": result.get("name"),
                             "email": "ram@freshservice.com",
                             "priority": 4,
