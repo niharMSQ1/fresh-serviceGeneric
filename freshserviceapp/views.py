@@ -18,8 +18,8 @@ def test(request):
 
 FRESHSERVICE_ACCOUNTS = [
     {
-        "domain": "secqureone770.freshservice.com",
-        "api_key": "cXZwcWhEcVJYdTh3WkltUW9aTw=="
+        "domain": "sq1vinay.freshservice.com",
+        "api_key": "eE4xcmdQMFlobkZyV1JZdmV2a1Q=	"
     },
     {
         "domain": "sq1.freshservice.com",
