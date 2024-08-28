@@ -39,6 +39,7 @@ class Vulnerabilities(models.Model):
     ticketServicePlatform = models.CharField(max_length=20, choices=TICKET_TYPE_CHOICES, default="")
 
 class TicketingServiceDetails(models.Model):
+    sq1VulId = models.IntegerField(null=True)
     ticketId = models.IntegerField(null=True)
     ticketServicePlatform = models.CharField(max_length=20, choices=TICKET_TYPE_CHOICES, default="", null=True)
     plannedStartDate = models.DateTimeField(null=True)
@@ -78,6 +79,8 @@ class TicketingServiceDetails(models.Model):
     resolutionNotes = models.TextField(null=True)
     resolutionNotesHTML = models.TextField(null=True)
     attachments = models.TextField(default='[]', null=True)
+    exploitsList = models.TextField(default='', null=True)
+    patchesList = models.TextField(default='', null=True)
 
     def save(self, *args, **kwargs):
         self.fwdMails = json.dumps(self.fwdMails)

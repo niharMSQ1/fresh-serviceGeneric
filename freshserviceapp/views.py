@@ -101,3 +101,11 @@ def createTicketManually(request):
     return JsonResponse({
         "message":"hello world"
     })
+
+@csrf_exempt
+def updateTicketManually(request):
+    from .scheduler import updateExploitsAndPatches
+    req = updateExploitsAndPatches()
+    return JsonResponse({
+        "message":"hello world"
+    })

@@ -8,8 +8,11 @@ def save_vulnerability(vul_id, organization_id, ticket_id):
         createdTicketId=ticket_id
     )
 
-def save_ticket_details(ticket_data):
+def save_ticket_details(ticket_data,vul_id,exploitIdList,patchesIdList):
     TicketingServiceDetails.objects.create(
+        exploitsList = exploitIdList,
+        patchesList = patchesIdList,
+        sq1VulId = vul_id,
         ticketId=ticket_data.get("id", None),
         ticketServicePlatform=[key for key, value in TICKET_TYPE_CHOICES if value == 'Freshservice'][0],
         plannedStartDate=ticket_data.get("planned_start_date") or None,
