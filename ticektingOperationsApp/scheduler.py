@@ -460,17 +460,19 @@ def updateExploitsAndPatches():
                 print()
                 if len(patches) > len(patchesList) or len(exploits) > len(exploitsList):
                     newPatchIds = [patch['id'] for patch in patches if patch['id'] not in patchesList]
-                    if newPatchIds !=[]:
-                        for patchId in newPatchIds:
-                            existingPatchIds = ast.literal_eval((TicketingServiceDetails.objects.get(sq1VulId = vulnerabilityId)).patchesList)
-                            newPatchesList = existingPatchIds+newPatchIds
-                            saveNewPatchesList = (TicketingServiceDetails(patchesList = str(newPatchesList))).save()
+                    if newPatchIds:
+                        ticket_service_details = TicketingServiceDetails.objects.get(sq1VulId=vulnerabilityId)
+                        existingPatchIds = ast.literal_eval(ticket_service_details.patchesList or '[]')
+                        newPatchesList = existingPatchIds + newPatchIds
+                        ticket_service_details.patchesList = str(newPatchesList)
+                        ticket_service_details.save()
                     newExploitIds = [exploit['id'] for exploit in exploits if exploit['id'] not in exploitsList]
-                    if newExploitIds !=[]:
-                        for exploitId in newExploitIds:
-                            existingExploitIds = ast.literal_eval((TicketingServiceDetails.objects.get(sq1VulId = vulnerabilityId)).exploitsList)
-                            newExploitsList = existingExploitIds + newExploitIds
-                            saveNewExploitList = (TicketingServiceDetails(exploitsList = str(newExploitsList))).save()
+                    if newExploitIds:
+                        ticket_service_details = TicketingServiceDetails.objects.get(sq1VulId=vulnerabilityId)
+                        existingExploitIds = ast.literal_eval(ticket_service_details.exploitsList or '[]')
+                        newExploitsList = existingExploitIds + newExploitIds
+                        ticket_service_details.exploitsList = str(newExploitsList)
+                        ticket_service_details.save()
 
                     cursor.execute(f"""
                     SELECT *
@@ -645,6 +647,7 @@ def updateExploitsAndPatches():
 
 def start_scheduler():
     scheduler = BackgroundScheduler()
-    # scheduler.add_job(call_create_ticket, IntervalTrigger(minutes=0.5))
+    scheduler.add_job(call_create_ticket, IntervalTrigger(minutes=90))
     # scheduler.add_job(check_closed_tickets, IntervalTrigger(minutes=0.25))
+    scheduler.add_job(updateExploitsAndPatches, IntervalTrigger(minutes=180))
     scheduler.start()

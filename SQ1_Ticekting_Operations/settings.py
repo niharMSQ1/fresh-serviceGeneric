@@ -17,7 +17,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    'freshserviceapp',
+    'ticektingOperationsApp',
 ]
 
 MIDDLEWARE = [
@@ -30,7 +30,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'freshserviecintegration.urls'
+ROOT_URLCONF = 'SQ1_Ticekting_Operations.urls'
 
 TEMPLATES = [
     {
@@ -48,7 +48,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'freshserviecintegration.wsgi.application'
+WSGI_APPLICATION = 'SQ1_Ticekting_Operations.wsgi.application'
 
 DATABASES = {
     'default': {

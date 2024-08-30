@@ -1,8 +1,8 @@
 from django.apps import AppConfig
 
 
-class FreshserviceappConfig(AppConfig):
-    name = 'freshserviceapp'
+class FicektingOperationsApp(AppConfig):
+    name = 'ticektingOperationsApp'
 
     def ready(self):
         from .scheduler import start_scheduler
